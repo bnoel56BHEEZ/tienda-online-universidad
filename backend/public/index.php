@@ -46,6 +46,7 @@ function database(): PDO
             email TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
             address TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT "user",
             created_at TEXT NOT NULL
         );
 
@@ -73,8 +74,27 @@ function database(): PDO
     ');
 
     seedProducts($pdo);
+    ensureUserRoleColumn($pdo);
+    seedAdminUser($pdo);
 
     return $pdo;
+}
+
+function ensureUserRoleColumn(PDO $pdo): void
+{
+    $columns = $pdo->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_ASSOC);
+    $hasRole = false;
+
+    foreach ($columns as $column) {
+        if ($column['name'] === 'role') {
+            $hasRole = true;
+            break;
+        }
+    }
+
+    if (!$hasRole) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT "user"');
+    }
 }
 
 function seedProducts(PDO $pdo): void
@@ -104,6 +124,30 @@ function seedProducts(PDO $pdo): void
     }
 }
 
+function seedAdminUser(PDO $pdo): void
+{
+    $email = 'admin@tiendanova.com';
+    $statement = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+    $statement->execute([$email]);
+
+    if ($statement->fetch(PDO::FETCH_ASSOC)) {
+        return;
+    }
+
+    $insert = $pdo->prepare('
+        INSERT INTO users (name, email, password, address, role, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ');
+    $insert->execute([
+        'Administrador',
+        $email,
+        password_hash('admin123', PASSWORD_DEFAULT),
+        'Panel administrativo',
+        'admin',
+        date('c'),
+    ]);
+}
+
 function publicUser(array $user): array
 {
     return [
@@ -111,6 +155,7 @@ function publicUser(array $user): array
         'name' => $user['name'],
         'email' => $user['email'],
         'address' => $user['address'],
+        'role' => $user['role'] ?? 'user',
     ];
 }
 
@@ -131,16 +176,17 @@ try {
             exit;
         }
 
-        $statement = $pdo->prepare('INSERT INTO users (name, email, password, address, created_at) VALUES (?, ?, ?, ?, ?)');
+        $statement = $pdo->prepare('INSERT INTO users (name, email, password, address, role, created_at) VALUES (?, ?, ?, ?, ?, ?)');
         $statement->execute([
             trim($body['name']),
             strtolower(trim($body['email'])),
             password_hash((string) $body['password'], PASSWORD_DEFAULT),
             trim($body['address']),
+            'user',
             date('c'),
         ]);
 
-        $user = $pdo->query('SELECT id, name, email, address FROM users WHERE id = ' . (int) $pdo->lastInsertId())->fetch(PDO::FETCH_ASSOC);
+        $user = $pdo->query('SELECT id, name, email, address, role FROM users WHERE id = ' . (int) $pdo->lastInsertId())->fetch(PDO::FETCH_ASSOC);
         jsonResponse(['message' => 'Usuario registrado correctamente.', 'user' => publicUser($user)], 201);
         exit;
     }
@@ -158,7 +204,31 @@ try {
             exit;
         }
 
-        jsonResponse(['message' => 'Inicio de sesion correcto.', 'user' => publicUser($user)]);
+        $loginMessage = ($user['role'] ?? 'user') === 'admin'
+            ? 'Inicio de sesion como administrador.'
+            : 'Inicio de sesion como usuario.';
+
+        jsonResponse(['message' => $loginMessage, 'user' => publicUser($user)]);
+        exit;
+    }
+
+    if ($path === '/api/admin/summary' && $method === 'GET') {
+        $totalUsers = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        $totalOrders = (int) $pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+        $totalSales = (float) $pdo->query('SELECT COALESCE(SUM(total), 0) FROM orders')->fetchColumn();
+        $orders = $pdo->query('
+            SELECT id, customer_name, customer_email, payment_method, payment_status, transaction_id, total, created_at
+            FROM orders
+            ORDER BY id DESC
+            LIMIT 5
+        ')->fetchAll(PDO::FETCH_ASSOC);
+
+        jsonResponse([
+            'totalUsers' => $totalUsers,
+            'totalOrders' => $totalOrders,
+            'totalSales' => $totalSales,
+            'recentOrders' => $orders,
+        ]);
         exit;
     }
 
