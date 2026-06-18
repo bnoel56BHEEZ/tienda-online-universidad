@@ -44,6 +44,7 @@ La API permite:
 - Consultar productos con `GET /api/products`.
 - Registrar usuarios con `POST /api/users/register`.
 - Iniciar sesion con `POST /api/users/login`.
+- Consultar resumen administrativo con `GET /api/admin/summary`.
 - Registrar una orden con `POST /api/orders`.
 - Simular un pago con `POST /api/payments`.
 
@@ -53,7 +54,23 @@ La base de datos se genera automaticamente en `backend/data/tienda.sqlite`. Se c
 - `products` para almacenar el catalogo.
 - `orders` para guardar compras, metodo de pago, total y folio de transaccion.
 
-## 6. Metodos de pago
+## 6. Usuarios, roles y administrador
+
+El sistema maneja dos tipos de cuenta:
+
+- Usuario: puede registrarse, iniciar sesion, agregar productos al carrito y confirmar compras.
+- Administrador: puede iniciar sesion y ver un panel con usuarios, pedidos, ventas totales y ultimas ordenes.
+
+La cuenta administrativa demo es:
+
+```text
+Correo: admin@tiendanova.com
+Contrasena: admin123
+```
+
+Cuando el inicio de sesion es correcto, la aplicacion muestra una notificacion indicando si la sesion inicio como usuario o como administrador.
+
+## 7. Metodos de pago
 
 El proyecto incluye seleccion de metodo de pago con tres opciones:
 
@@ -63,7 +80,7 @@ El proyecto incluye seleccion de metodo de pago con tres opciones:
 
 Para fines escolares, el pago se simula desde la API. Al confirmar la compra, la API responde con un estado aprobado y un folio de transaccion. En un ambiente real, este modulo se conectaria con las APIs oficiales de cada proveedor.
 
-## 7. Como ejecutar el proyecto
+## 8. Como ejecutar el proyecto
 
 ### Backend
 
@@ -84,12 +101,15 @@ npm run dev
 
 Despues abrir en el navegador la URL indicada por Vite, normalmente `http://localhost:5173`.
 
-## 8. Pruebas realizadas
+## 9. Pruebas realizadas
 
 Se probaron las siguientes funciones:
 
 - Registro de usuario.
-- Inicio de sesion.
+- Inicio de sesion como usuario.
+- Inicio de sesion como administrador.
+- Notificacion de sesion iniciada.
+- Panel de administrador.
 - Visualizacion del catalogo.
 - Agregar productos al carrito.
 - Incrementar y disminuir cantidades.
@@ -100,10 +120,10 @@ Se probaron las siguientes funciones:
 - Guardar la orden en la base de datos.
 - Recibir folio de transaccion desde la API PHP.
 
-## 9. Despliegue web
+## 10. Despliegue web
 
 El sistema se preparo para despliegue en Netlify. La parte del cliente se publica en una URL HTTPS usando el build de React. La API PHP y SQLite se ejecutan localmente para mostrar la division cliente-servidor solicitada.
 
-## 10. Conclusion
+## 11. Conclusion
 
-El proyecto cumple con los requisitos solicitados: una tienda en linea con frontend en React + Tailwind CSS, backend en PHP, base de datos SQLite, gestion de usuarios, opciones de metodo de pago y documentacion digital del proceso de desarrollo.
+El proyecto cumple con los requisitos solicitados: una tienda en linea con frontend en React + Tailwind CSS, backend en PHP, base de datos SQLite, gestion de usuarios, cuenta de administrador, opciones de metodo de pago y documentacion digital del proceso de desarrollo.

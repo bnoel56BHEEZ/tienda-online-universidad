@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CreditCard, Minus, Plus, ShoppingCart, Store, Trash2, UserRound } from "lucide-react";
+import { Bell, CreditCard, LogOut, Minus, Plus, ShieldCheck, ShoppingCart, Store, Trash2, UserRound } from "lucide-react";
 import "./styles.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
@@ -79,10 +79,12 @@ function simulatedPayment(method, total) {
 function App() {
   const [products, setProducts] = useState(initialProducts);
   const [cart, setCart] = useState([]);
-  const [customer, setCustomer] = useState({ id: null, name: "", email: "", password: "", address: "" });
+  const [customer, setCustomer] = useState({ id: null, name: "", email: "", password: "", address: "", role: "user" });
   const [authMode, setAuthMode] = useState("register");
+  const [adminSummary, setAdminSummary] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("mercado_pago");
   const [message, setMessage] = useState("");
+  const [notification, setNotification] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/products`)
@@ -101,6 +103,15 @@ function App() {
   );
   const shipping = cart.length > 0 ? 99 : 0;
   const total = subtotal + shipping;
+
+  useEffect(() => {
+    if (!notification) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotification(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notification]);
 
   function addToCart(product) {
     setCart((current) => {
@@ -126,6 +137,31 @@ function App() {
     setCart((current) => current.filter((item) => item.id !== id));
   }
 
+  function signOut() {
+    setCustomer({ id: null, name: "", email: "", password: "", address: "", role: "user" });
+    setAdminSummary(null);
+    setMessage("Sesion cerrada.");
+    setNotification("Sesion cerrada correctamente.");
+  }
+
+  async function loadAdminSummary() {
+    try {
+      const response = await fetch(`${API_URL}/admin/summary`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setAdminSummary(data);
+      }
+    } catch {
+      setAdminSummary({
+        totalUsers: 1,
+        totalOrders: 0,
+        totalSales: 0,
+        recentOrders: []
+      });
+    }
+  }
+
   async function handleAccount(event) {
     event.preventDefault();
 
@@ -147,18 +183,60 @@ function App() {
         return;
       }
 
-      setCustomer({ ...data.user, password: "" });
+      const loggedUser = { ...data.user, password: "" };
+      setCustomer(loggedUser);
       setMessage(data.message);
+      setNotification(data.message);
+
+      if (loggedUser.role === "admin") {
+        loadAdminSummary();
+      } else {
+        setAdminSummary(null);
+      }
     } catch {
+      const isDemoAdmin = customer.email.toLowerCase().trim() === "admin@tiendanova.com" && customer.password === "admin123";
       const demoUser = {
         id: Date.now(),
-        name: customer.name || "Cliente demo",
+        name: isDemoAdmin ? "Administrador" : customer.name || "Cliente demo",
         email: customer.email,
-        address: customer.address || "Direccion capturada en Netlify",
-        password: ""
+        address: isDemoAdmin ? "Panel administrativo" : customer.address || "Direccion capturada en Netlify",
+        password: "",
+        role: isDemoAdmin ? "admin" : "user"
       };
       setCustomer(demoUser);
-      setMessage("Cuenta lista en modo Netlify.");
+      setMessage(isDemoAdmin ? "Inicio de sesion como administrador." : "Cuenta lista en modo Netlify.");
+      setNotification(isDemoAdmin ? "Inicio de sesion como administrador." : "Inicio de sesion como usuario.");
+
+      if (isDemoAdmin) {
+        setAdminSummary({
+          totalUsers: 4,
+          totalOrders: 3,
+          totalSales: 6893,
+          recentOrders: [
+            {
+              id: 3,
+              customer_name: "Cliente demo",
+              payment_method: "mercado_pago",
+              payment_status: "approved",
+              total: 2198
+            },
+            {
+              id: 2,
+              customer_name: "Usuario prueba",
+              payment_method: "paypal",
+              payment_status: "approved",
+              total: 1299
+            },
+            {
+              id: 1,
+              customer_name: "Compra inicial",
+              payment_method: "stripe",
+              payment_status: "approved",
+              total: 3396
+            }
+          ]
+        });
+      }
     }
   }
 
@@ -208,16 +286,28 @@ function App() {
 
       const data = await response.json();
       setMessage(`Pedido confirmado. Orden: ${orderData.orderId}. Folio: ${orderData.transactionId || data.transactionId}`);
+      setNotification("Pedido confirmado correctamente.");
       setCart([]);
+      if (customer.role === "admin") {
+        loadAdminSummary();
+      }
     } catch {
       const data = simulatedPayment(paymentMethod, total);
       setMessage(`Pedido confirmado en modo Netlify. Folio: ${data.transactionId}`);
+      setNotification("Pedido confirmado en modo Netlify.");
       setCart([]);
     }
   }
 
   return (
     <main className="min-h-screen bg-slate-50 text-ink">
+      {notification && (
+        <div className="fixed right-4 top-4 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-900 shadow-lg">
+          <Bell size={18} />
+          {notification}
+        </div>
+      )}
+
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
@@ -234,10 +324,86 @@ function App() {
             {cart.reduce((totalItems, item) => totalItems + item.quantity, 0)} productos
           </div>
         </div>
+        {customer.id && (
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+            <div className="flex items-center gap-2">
+              {customer.role === "admin" ? <ShieldCheck size={18} className="text-brand" /> : <UserRound size={18} className="text-brand" />}
+              <span>
+                Sesion iniciada como <strong>{customer.role === "admin" ? "administrador" : "usuario"}</strong>: {customer.name}
+              </span>
+            </div>
+            <button className="flex items-center gap-2 rounded border px-3 py-2 font-semibold hover:bg-slate-50" onClick={signOut} type="button">
+              <LogOut size={16} />
+              Cerrar sesion
+            </button>
+          </div>
+        )}
       </header>
 
       <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[1fr_390px]">
         <div>
+          {customer.role === "admin" && (
+            <section className="mb-6 rounded-lg border bg-white p-5 shadow-sm">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-xl font-bold">
+                    <ShieldCheck size={22} />
+                    Panel de administrador
+                  </h2>
+                  <p className="text-sm text-slate-600">Resumen general de la tienda.</p>
+                </div>
+                <button className="rounded border border-brand px-3 py-2 text-sm font-bold text-brand hover:bg-teal-50" onClick={loadAdminSummary} type="button">
+                  Actualizar
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded border bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Usuarios</p>
+                  <strong className="text-2xl">{adminSummary?.totalUsers ?? 0}</strong>
+                </div>
+                <div className="rounded border bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Pedidos</p>
+                  <strong className="text-2xl">{adminSummary?.totalOrders ?? 0}</strong>
+                </div>
+                <div className="rounded border bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Ventas</p>
+                  <strong className="text-2xl">{money(adminSummary?.totalSales ?? 0)}</strong>
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[620px] text-left text-sm">
+                  <thead className="border-b text-slate-500">
+                    <tr>
+                      <th className="py-2">Orden</th>
+                      <th>Cliente</th>
+                      <th>Pago</th>
+                      <th>Total</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(adminSummary?.recentOrders ?? []).map((order) => (
+                      <tr className="border-b" key={order.id}>
+                        <td className="py-2">ORD-{order.id}</td>
+                        <td>{order.customer_name}</td>
+                        <td>{order.payment_method}</td>
+                        <td>{money(Number(order.total))}</td>
+                        <td>{order.payment_status}</td>
+                      </tr>
+                    ))}
+                    {(adminSummary?.recentOrders ?? []).length === 0 && (
+                      <tr>
+                        <td className="py-3 text-slate-500" colSpan="5">Todavia no hay pedidos registrados.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           <div className="mb-5 flex items-end justify-between">
             <div>
               <h2 className="text-2xl font-bold">Catalogo</h2>
@@ -294,7 +460,7 @@ function App() {
                 <input className="field" placeholder="Nombre completo" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} />
               )}
               <input className="field" placeholder="Correo electronico" type="email" value={customer.email} onChange={(event) => setCustomer({ ...customer, email: event.target.value })} />
-              <input className="field" placeholder="Contraseña" type="password" value={customer.password} onChange={(event) => setCustomer({ ...customer, password: event.target.value })} />
+              <input className="field" placeholder="Contrasena" type="password" value={customer.password} onChange={(event) => setCustomer({ ...customer, password: event.target.value })} />
               {authMode === "register" && (
                 <textarea className="field min-h-20" placeholder="Direccion de entrega" value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })} />
               )}
@@ -304,9 +470,12 @@ function App() {
             </form>
             {customer.id && (
               <p className="mt-3 rounded bg-emerald-50 p-3 text-sm text-emerald-900">
-                Cliente activo: {customer.name} ({customer.email})
+                Cuenta activa: {customer.name} ({customer.email}) - {customer.role === "admin" ? "Administrador" : "Usuario"}
               </p>
             )}
+            <p className="mt-3 rounded border border-dashed p-3 text-xs text-slate-500">
+              Admin demo: admin@tiendanova.com / admin123
+            </p>
           </section>
 
           <h2 className="flex items-center gap-2 text-xl font-bold">

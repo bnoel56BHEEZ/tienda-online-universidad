@@ -44,8 +44,31 @@ La API crea automaticamente una base de datos SQLite en `backend/data/tienda.sql
 - `GET /api/products` muestra los productos.
 - `POST /api/users/register` registra un usuario.
 - `POST /api/users/login` inicia sesion.
+- `GET /api/admin/summary` muestra el resumen del panel administrador.
 - `POST /api/orders` registra una orden.
 - `POST /api/payments` simula un pago con Stripe, PayPal o Mercado Pago.
+
+## Cuenta de administrador
+
+La API crea automaticamente una cuenta demo de administrador:
+
+```text
+Correo: admin@tiendanova.com
+Contrasena: admin123
+```
+
+Al iniciar sesion con esta cuenta, el frontend muestra una notificacion y abre el panel de administrador.
+
+## Modificar y subir cambios a GitHub
+
+Despues de editar archivos en VS Code:
+
+```bash
+git status
+git add .
+git commit -m "Agrega panel de administrador"
+git push
+```
 
 ## Entregables incluidos
 
